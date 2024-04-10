@@ -1,3 +1,3 @@
-mod parser;
-use super::graphics;
+pub mod parser;
+pub mod lexer;
 
