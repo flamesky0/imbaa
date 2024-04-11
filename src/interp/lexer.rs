@@ -1,9 +1,9 @@
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub enum Token {
     ID(String),
     // -- integer numbers
-    NUMBER(i64), // regex
+    NUMBER(i64), // only decimal numbers :))
     INF, // inf
     NINF, // -inf
     NAN, // nan
@@ -18,6 +18,9 @@ pub enum Token {
     EXIT, // exit
     //UNDEF, -- the same for cell and logic
     VAR, // var, variable of any type
+    INT,
+    BOOL,
+    CELL,
     // -- flow control
     WHILE, // while
     DO, // do
@@ -41,20 +44,26 @@ pub enum Token {
     DROP, // drop
     LOOK, // look
     TEST, // test
+    FORWARD, // forward
+    BACKWARD, // backward
     // -- --
     FUNCTION, // function
     LP, // (
+    LB, // [
     RP, // )
+    RB, // ]
+    SEMICOLON, // ;
     RETURN, // return
+    UNKNOWN, // return
 }
 
-/* struct {
-    token : Token,
-    string : &'static str
-} */
-static TABLE_OF_TOKENS : [(Token, &'static str); 36] =
+/* table of static tokens */
+static TABLE_OF_TOKENS : [(Token, &'static str); 43] =
                             [
+                                (Token::BACKWARD, "BACKWARD"),
+                                (Token::BOOL, "BOOL"),
                                 (Token::BOX, "BOX"),
+                                (Token::CELL, "CELL"),
                                 (Token::DONE, "DONE"),
                                 (Token::DO, "DO"),
                                 (Token::DROP, "DROP"),
@@ -64,10 +73,11 @@ static TABLE_OF_TOKENS : [(Token, &'static str); 36] =
                                 (Token::ELUND, "ELUND"),
                                 (Token::FALSE, "FALSE"),
                                 (Token::FINISH, "FINISH"),
+                                (Token::FORWARD, "FORWARD"),
                                 (Token::FUNCTION, "FUNCTION"),
                                 (Token::INF, "INF"),
+                                (Token::INT, "INT"),
                                 (Token::NINF, "-INF"),
-                                (Token::INF, "INF"),
                                 (Token::LEFT, "LEFT"),
                                 (Token::LOAD, "LOAD"),
                                 (Token::LOOK, "LOOK"),
@@ -89,7 +99,10 @@ static TABLE_OF_TOKENS : [(Token, &'static str); 36] =
                                 (Token::MORE, ">"),
                                 (Token::ASSIGN, ":="),
                                 (Token::LP, "("),
+                                (Token::LB, "["),
                                 (Token::RP, ")"),
+                                (Token::RB, "]"),
+                                (Token::SEMICOLON, ";"),
                             ];
 pub struct Lexer {
     source : String,
@@ -106,32 +119,91 @@ impl Lexer {
         let ptr = self.source.as_ptr();
         while self.index < self.source.len() {
             unsafe {
-                while (*ptr).is_ascii_whitespace() {
+                while (*ptr.add(self.index)).is_ascii_whitespace() {
                     self.index += 1;
-                    continue
+                    // continue
                 }
+                /* match static tokens */
                 for (token, string) in TABLE_OF_TOKENS.iter() {
-                    if Lexer::cmp(ptr.add(self.index), string) {
+                    //println!("{:?} {}", token, string);
+                    if self.cmp(ptr.add(self.index), string) {
                         self.index += string.len();
                         return Some((*token).clone())
                     }
                 }
+                match self.match_id(ptr.add(self.index)) {
+                    Some(string) => return Some(Token::ID(string)),
+                    None => ()
+                }
+                match self.match_num(ptr.add(self.index)) {
+                    Some(num) => return Some(Token::NUMBER(num)),
+                    None => ()
+                }
+                /* nothing mathed, lexic error */
+                return Some(Token::UNKNOWN);
             }
         }
         None
     }
 
-    fn cmp(ptr : *const u8, substr : &str) -> bool {
+    unsafe fn match_id(&mut self, ptr : *const u8) -> Option<String> {
+        let mut string = String::with_capacity(64);
+        let mut i = 0;
+        while ptr.add(i) < self.source.as_ptr().add(self.source.len()) &&
+                (*ptr.add(i)).is_ascii_alphabetic() {
+                string.push(*ptr.add(i) as char);
+                i = i + 1;
+        }
+        if !string.is_empty() {
+            self.index += i;
+            return Some(string);
+        }
+        return None;
+    }
+
+    unsafe fn match_num(&mut self, ptr : *const u8) -> Option<i64> {
+        let mut string = String::with_capacity(64);
+        let mut i = 0;
+        while ptr.add(i) < self.source.as_ptr().add(self.source.len()) &&
+                (*ptr.add(i)).is_ascii_digit() {
+                string.push(*ptr.add(i) as char);
+                i = i + 1;
+        }
+        if !string.is_empty() {
+            self.index += i;
+            return Some(string.parse::<i64>().unwrap());
+        }
+        return None;
+    }
+
+    unsafe fn cmp(&self ,ptr : *const u8, substr : &str) -> bool {
         let mut i = 0;
         while i < substr.len() {
-            unsafe {
-                if *ptr.add(i) != substr.as_bytes()[i] {
+                if ptr.add(i) >= self.source.as_ptr().add(self.source.len()) ||
+                    *ptr.add(i) != substr.as_bytes()[i] {
                     return false;
                 }
-            }
             i = i + 1;
         }
         return true;
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test1() {
+        let string1 = String::from("   VAR INT BOOL CELL ; + - < > = while do finIsh donw forward ; look ) (  ) () 381
+                                    8 + 34 := 3 ^ drop reTURn elund eldef = < ; :=  xor bool nan inf -INF --InF");
+        let mut lexer = Lexer::new(string1);
+        println!("JOPA!");
+        while let Some(token) = lexer.get_token() {
+            println!("{:?}", token);
+            match token {
+                Token::UNKNOWN => return,
+                _ => ()
+            }
+        }
+    }
+}
