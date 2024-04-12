@@ -16,7 +16,6 @@ fn main() -> Result<(), std::io::Error> {
     let mut program = String::new();
     let mut file_with_map : File;
     let mut map = String::new();
-    let parser = parser::Parser::new();
 
     if args.len() != 3 {
         help();
@@ -30,8 +29,9 @@ fn main() -> Result<(), std::io::Error> {
         return Ok(());
     }
 
+    let mut parser = parser::Parser::new(program);
     /* build AST here */
-    parser.build_ast(program);
+    parser.build_ast();
     file_with_map = File::open(args.nth(2).unwrap())?;
     file_with_map.read_to_string(&mut map)?;
     Ok(())

@@ -41,7 +41,7 @@ func_list:
 	;
 
 func:
-    		FUNCTION '(' ID ')' DO stmts DONE
+    		FUNCTION ID '(' ID ')' DO stmts DONE
 	;
 
 stmts:
@@ -59,7 +59,7 @@ stmt:
 	|	WHILE expr DO stmts DONE FINISH stmts DONE
 	|	ID ASSGN arex ';'
 	|	expr ';'
-	|	FUNCTION '(' ID ')' ';' // values transfer over variable only
+	|	ID '(' ID ')' ';' // function call, values transfer over variable only
 	| 	RETURN ';'
 	;
 
@@ -99,7 +99,6 @@ arex:
 	|	factor '+' arex
 	|	factor '-' arex
 	|	factor '^' arex // it is XOR
-	|	'#' ID
 	|	'-' arex
 	;
 

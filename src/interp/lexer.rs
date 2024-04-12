@@ -53,12 +53,13 @@ pub enum Token {
     RP, // )
     RB, // ]
     SEMICOLON, // ;
+    COMMA, // ,
     RETURN, // return
     UNKNOWN, // return
 }
 
 /* table of static tokens */
-static TABLE_OF_TOKENS : [(Token, &'static str); 43] =
+static TABLE_OF_TOKENS : [(Token, &'static str); 44] =
                             [
                                 (Token::BACKWARD, "BACKWARD"),
                                 (Token::BOOL, "BOOL"),
@@ -103,6 +104,7 @@ static TABLE_OF_TOKENS : [(Token, &'static str); 43] =
                                 (Token::RP, ")"),
                                 (Token::RB, "]"),
                                 (Token::SEMICOLON, ";"),
+                                (Token::COMMA, ",")
                             ];
 pub struct Lexer {
     source : String,
@@ -194,10 +196,11 @@ mod tests {
     use super::*;
     #[test]
     fn test1() {
-        let string1 = String::from("   VAR INT BOOL CELL ; + - < > = while do finIsh donw forward ; look ) (  ) () 381
+        let _string1 = String::from("   VAR INT BOOL CELL ; + - < > = while do finIsh donw forward ; look ) (  ) () 381
                                     8 + 34 := 3 ^ drop reTURn elund eldef = < ; :=  xor bool nan inf -INF --InF");
-        let mut lexer = Lexer::new(string1);
-        println!("JOPA!");
+
+        let _string2 = String::from("var misha, masha, jopa; bool mesha;");
+        let mut lexer = Lexer::new(_string2);
         while let Some(token) = lexer.get_token() {
             println!("{:?}", token);
             match token {
