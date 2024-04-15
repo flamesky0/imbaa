@@ -24,12 +24,26 @@ enum Val {
     CELL(CellVal)
 }
 
+impl Val {
+    pub fn new() -> Val {
+        Val::UNDEF
+    }
+}
 #[derive(Debug)]
 struct Var {
     name : String,
-    value : Val
+    val : Val
 }
 
+impl Var {
+    pub fn new() -> Var {
+        Var {name : String::new(), val : Val::new()}
+    }
+
+    pub fn from(name : String, val : Val) -> Var {
+        Var {name, val}
+    }
+}
 #[derive(Debug)]
 struct IfStmt {
     cond : Box<Stmt>,
@@ -90,8 +104,17 @@ enum Stmt {
 #[derive(Debug)]
 struct Func {
     name : String,
+    param : Var,
     vars : Vec<Var>,
     stmts : Vec<Stmt>
+}
+
+impl Func {
+    pub fn new() ->  Func {
+        Func {name : String::new(),
+              param : Var::new(),
+              vars : Vec::new(), stmts : Vec::new()}
+    }
 }
 
 #[derive(Debug)]
@@ -120,13 +143,11 @@ impl Parser {
         }
     }
 
-    fn parse_var_decl(&mut self) -> bool {
+    fn parse_var_decl(&mut self) -> Option<Vec<Var>> {
         use lexer::Token;
         let val : Val;
-        let mut var : Var;
-        if self.index >= self.tokens.len() {
-            return false;
-        }
+        let mut vars : Vec<Var> = Vec::new();
+
         match self.tokens[self.index] {
             Token::VAR => {
                 val = Val::UNDEF;
@@ -140,8 +161,11 @@ impl Parser {
             Token::CELL => {
                 val = Val::CELL(CellVal::UNDEF);
             }
+            Token::EOF => {
+                panic!("Unexpected EOF");
+            }
             _ => {
-                return false;
+                return None;
             }
         }
         self.index += 1;
@@ -158,33 +182,28 @@ impl Parser {
             match token {
                 Token::ID(string) => {
                     if prev == Prev::DECL || prev == Prev::COMMA {
-                        var = Var {name : string.clone(), value: val};
-                        self.ast.vars.push(var);
+                        vars.push(Var::from(string.clone(), val));
                     } else {
-                        println!("Var declaration error, ID is not expected!");
-                        panic!()
+                        panic!("Var declaration error, ID is not expected!");
                     }
                     prev = Prev::ID;
                 }
                 Token::COMMA => {
                     if prev != Prev::ID {
-                        println!("Var declaration error, comma is not expected!");
-                        panic!()
+                        panic!("Var declaration error, comma is not expected!");
                     }
                     prev = Prev::COMMA;
                 }
                 Token::SEMICOLON => {
                     if prev != Prev::ID {
-                        println!("Var declaration error, semicolon is not expected!");
-                        panic!()
+                        panic!("Var declaration error, semicolon is not expected!");
                     }
                     prev = Prev::SEMICOLON;
                     self.index += 1;
                     break;
                 }
                 _ => {
-                        println!("Var declaration error, unexpected token {:?}!", token);
-                        panic!()
+                        panic!("Var declaration error, unexpected token {:?}!", token);
                 }
             }
             self.index += 1;
@@ -195,11 +214,144 @@ impl Parser {
             panic!();
         }
 
-        return true;
+        return Some(vars);
+    }
+
+    fn parse_stmt(&mut self) -> Option<Stmt> {
+        use lexer::Token;
+        let mut stmts = Vec::new();
+
+        match &self.tokens[self.index] {
+            Token::VAR | Token::BOOL | Token::INT | Token::CELL => {
+                if let Some(mut vec) = self.parse_var_decl() {
+                    stmts.append(&mut vec);
+                }
+            }
+            Token::IF => {
+                self.parse_if()
+            }
+            Token::WHILE => {
+
+            }
+            Token::ID(_) => {
+
+            }
+            Token::LOOK | Token::TEST | Token::LEFT | Token::RIGHT |
+            Token::LOAD | Token::DROP | Token::FORWARD | Token::BACKWARD => {
+
+            }
+            Token::RETURN => {
+
+            }
+            _ => {
+                panic!("unexpected token {:?}", self.tokens[self.index]);
+            }
+        }
+
+        match &self.tokens[self.index] {
+            Token::SEMICOLON => {
+                self.index += 1;
+            }
+            _ => {
+                panic!("token ; expected, {:?} found", self.tokens[self.index]);
+            }
+        }
+        return Some(stmts);
+    }
+
+    fn parse_func(&mut self) -> bool {
+        use lexer::Token;
+        let mut func : Func = Func::new();
+
+        /* FUNCTION */
+        match &self.tokens[self.index] {
+            Token::FUNCTION => {
+                self.index += 1;
+            }
+            _ => {
+                panic!("expected token FUNCTION, {:?} found", self.tokens[self.index]);
+            }
+        }
+
+        /* ID */
+        match &self.tokens[self.index] {
+            Token::ID(string) => {
+                func.name = string.clone();
+                self.index += 1;
+            }
+            _ => {
+                panic!("token ID expected, {:?} found", self.tokens[self.index]);
+            }
+        }
+
+        /* ( */
+        match &self.tokens[self.index] {
+            Token::LP => {
+                self.index += 1;
+            }
+            _ => {
+                panic!("token ( expected, {:?} found", self.tokens[self.index]);
+            }
+        }
+
+        /* ID */
+        match &self.tokens[self.index] {
+            Token::ID(string) => {
+                func.param = Var::from(string.clone(), Val::new());
+                self.index += 1;
+            }
+            _ => {
+                panic!("token ID expected, {:?} found", self.tokens[self.index]);
+            }
+        }
+
+        /* ) */
+        match &self.tokens[self.index] {
+            Token::RP => {
+                self.index += 1;
+            }
+            _ => {
+                panic!("token ) expected, {:?} found", self.tokens[self.index]);
+            }
+        }
+
+        /* DO */
+        match &self.tokens[self.index] {
+            Token::DO => {
+                self.index += 1;
+            }
+            _ => {
+                panic!("token ) expected, {:?} found", self.tokens[self.index]);
+            }
+        }
+
+        /* stmt */
+        while let Some(stmt) = self.parse_stmt() {
+            func.stmts.push(stmt);
+        }
+
+        /* DONE */
+        match &self.tokens[self.index] {
+            Token::DONE => {
+                self.index += 1;
+            }
+            _ => {
+                panic!("token ) expected, {:?} found", self.tokens[self.index]);
+            }
+        }
+
+        true
     }
 
     fn parse_func_list(&mut self) -> bool {
-        false
+        let mut n = 0;
+        while self.parse_func() {
+            n = n + 1;
+        }
+        if n > 0 {
+            return true;
+        }
+        return false;
     }
 
     pub fn build_ast(&mut self) -> bool {
@@ -215,17 +367,19 @@ impl Parser {
                 }
             }
         }
+        self.tokens.push(Token::EOF);
 
         let i = self.index;
         let mut n = 0;
-        while self.parse_var_decl() {
+        while let Some(mut vec) = self.parse_var_decl() {
+            self.ast.vars.append(&mut vec);
             n = n + 1;
         }
         if n == 0 {
             println!("There is no global variables");
             self.index = i;
         }
-        if !self.parse_func_list() {
+        if self.parse_func_list() {
             println!("There is no funtions! Write a one!");
             return false;
         }

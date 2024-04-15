@@ -22,6 +22,7 @@ pub enum Token {
     BOOL,
     CELL,
     // -- flow control
+    IF,
     WHILE, // while
     DO, // do
     DONE, // done
@@ -56,10 +57,11 @@ pub enum Token {
     COMMA, // ,
     RETURN, // return
     UNKNOWN, // return
+    EOF
 }
 
 /* table of static tokens */
-static TABLE_OF_TOKENS : [(Token, &'static str); 44] =
+static TABLE_OF_TOKENS : [(Token, &'static str); 45] =
                             [
                                 (Token::BACKWARD, "BACKWARD"),
                                 (Token::BOOL, "BOOL"),
@@ -76,6 +78,7 @@ static TABLE_OF_TOKENS : [(Token, &'static str); 44] =
                                 (Token::FINISH, "FINISH"),
                                 (Token::FORWARD, "FORWARD"),
                                 (Token::FUNCTION, "FUNCTION"),
+                                (Token::IF, "IF"),
                                 (Token::INF, "INF"),
                                 (Token::INT, "INT"),
                                 (Token::NINF, "-INF"),

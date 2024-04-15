@@ -24,7 +24,11 @@
 %token ELUND
 
 %%
-
+/*
+	THIS GRAMMAR IS NOT USED IN PROJECT IN ANY WAY,
+	IT'S PURPOSE TO BE REFERENCE BISON-CHECKED GRAMMAR
+	OF LANGUAGE FOR AUTHOR TO BUILD PARSER
+*/
 program:
 		var_decls
 	|	func_list
@@ -51,14 +55,14 @@ stmts:
 
 stmt:
 		var_decl ';'
-    	|	IF expr DO stmts DONE
-    	|	IF expr DO stmts DONE ELDEF DO stmts DONE
-    	|	IF expr DO stmts DONE ELUND DO stmts DONE
-    	|	IF expr DO stmts DONE ELDEF DO stmts DONE ELUND DO stmts DONE
-	|	WHILE expr DO stmts DONE
-	|	WHILE expr DO stmts DONE FINISH stmts DONE
+    	|	IF lgex DO stmts DONE
+    	|	IF lgex DO stmts DONE ELDEF DO stmts DONE
+    	|	IF lgex DO stmts DONE ELUND DO stmts DONE
+    	|	IF lgex DO stmts DONE ELDEF DO stmts DONE ELUND DO stmts DONE
+	|	WHILE lgex DO stmts DONE
+	|	WHILE lgex DO stmts DONE FINISH stmts DONE
 	|	ID ASSGN arex ';'
-	|	expr ';'
+	|	command ';'
 	|	ID '(' ID ')' ';' // function call, values transfer over variable only
 	| 	RETURN ';'
 	;
@@ -75,8 +79,8 @@ var_list:
 	|	ID ',' var_list
 	;
 
-expr:
-		LOOK
+command:
+       		LOOK
 	|	TEST
 	|	LEFT
 	|	RIGHT
@@ -84,8 +88,8 @@ expr:
 	|	DROP arex
 	|	FORWARD arex
 	|	BACKWARD arex
-	|	lgex
-	;
+
+       ;
 
 lgex:
 	|	lgex '>' arex
