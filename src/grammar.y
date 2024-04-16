@@ -91,9 +91,9 @@ command:
        ;
 
 lgex:
-	|	lgex '>' arex
-	|	lgex '<' arex
-	|	lgex '=' arex
+	|	agex '>' lrex
+	|	agex '<' lrex
+	|	agex '=' lrex
 	|	arex
 	;
 
@@ -109,4 +109,8 @@ factor:
       		'(' arex ')'
 	|	ID
 	|	NUM
+	|	FALSE
+	|	TRUE
+	|	EMPTY
+	|	EXIT
 	;

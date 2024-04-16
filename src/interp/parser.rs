@@ -61,14 +61,14 @@ impl IfStmt {
 
 #[derive(Debug)]
 struct WhileStmt {
-    cond : Box<Stmt>,
+    cond : LogicExpr,
     stmts : Vec<Stmt>,
     finish : Vec<Stmt>
 }
 
 impl WhileStmt {
     pub fn new() -> WhileStmt {
-        WhileStmt { cond : Box::new(Stmt::new()), stmts : Vec::new(), finish : Vec::new() }
+        WhileStmt { cond : LogicExpr::new(), stmts : Vec::new(), finish : Vec::new() }
     }
 }
 
@@ -76,17 +76,21 @@ impl WhileStmt {
 enum OP {
     LESS,
     MORE,
-    EQUA,
+    EQUALS,
     PLUS,
-    MINU,
+    MINUS,
     XOR
 }
 
 #[derive(Debug)]
 enum ArithExpr {
-    EXPR((Box<ArithExpr>, OP)),
+    EXPR((Box<ArithExpr>, Box<ArithExpr>, OP)),
     ID(Var),
     NUM(i64),
+    FALSE,
+    TRUE,
+    EMPTY,
+    EXIT,
     UNDEF
 }
 
@@ -99,20 +103,24 @@ impl ArithExpr {
 #[derive(Debug)]
 struct LogicExpr {
     operation : Option<OP>,
-    lterm : ArithExpr,
-    rterm : ArithExpr
+    larex : ArithExpr,
+    rarex : ArithExpr
 }
 
 impl LogicExpr {
     pub fn new() -> LogicExpr {
-        LogicExpr {operation : None, lterm : ArithExpr::new(), rterm : ArithExpr::new()}
+        LogicExpr {operation : None, larex : ArithExpr::new(), rarex : ArithExpr::new()}
+    }
+    pub fn from(op : Option<OP>, larex : ArithExpr, rarex :ArithExpr) -> LogicExpr {
+        LogicExpr {operation: op, larex, rarex}
     }
 }
+
 #[derive(Debug)]
 enum Stmt {
     IF(IfStmt),
     WHILE(WhileStmt),
-    ASSGN(Var, Box<Stmt>),
+    ASSGN(Var, ArithExpr),
     CALL(String, Var),
     LOAD(ArithExpr),
     DROP(ArithExpr),
@@ -174,14 +182,15 @@ impl Parser {
     }
 
     fn match_token(&mut self, token : lexer::Token) {
-        match self.tokens[self.index] {
-            token => {
-                self.index += 1;
-            }
-            _ => {
-                panic!("{:?} expected, {:?} found", token, self.tokens[self.index])
-            }
+        if self.tokens[self.index] == token {
+            self.index += 1;
+        } else {
+            panic!("{:?} expected, {:?} found", token, self.next_token())
         }
+    }
+
+    fn next_token(&self) -> &lexer::Token {
+        return &self.tokens[self.index];
     }
 
     fn parse_var_decl(&mut self) -> Option<Vec<Var>> {
@@ -189,7 +198,7 @@ impl Parser {
         let val : Val;
         let mut vars : Vec<Var> = Vec::new();
 
-        match self.tokens[self.index] {
+        match self.next_token() {
             Token::VAR => {
                 val = Val::UNDEF;
             }
@@ -255,7 +264,32 @@ impl Parser {
     }
 
     fn parse_logic_expr(&mut self) -> LogicExpr {
-        LogicExpr::new()
+        use lexer::Token;
+        let larex;
+        let rarex;
+        larex = self.parse_arith_expr();
+        match self.next_token() {
+            Token::LESS => {
+                self.index += 1;
+                rarex = self.parse_arith_expr();
+                return LogicExpr::from(Some(OP::LESS), larex, rarex);
+            }
+            Token::MORE => {
+                self.index += 1;
+                rarex = self.parse_arith_expr();
+                return LogicExpr::from(Some(OP::MORE), larex, rarex);
+            }
+            Token::EQUALS => {
+                self.index += 1;
+                rarex = self.parse_arith_expr();
+                return LogicExpr::from(Some(OP::EQUALS), larex, rarex);
+
+            }
+            _ => {
+                return LogicExpr::from(None, larex, ArithExpr::new());
+            }
+        }
+
     }
 
     fn parse_if_stmt(&mut self) -> Option<Stmt> {
@@ -272,7 +306,7 @@ impl Parser {
 
         self.match_token(Token::DONE);
 
-        match self.tokens[self.index] {
+        match self.next_token() {
             Token::ELDEF => {
                 self.index += 1;
                 while let Some(stmt) = self.parse_stmt() {
@@ -283,7 +317,7 @@ impl Parser {
             _ => {}
         }
 
-        match self.tokens[self.index] {
+        match self.next_token() {
             Token::ELUND => {
                 self.index += 1;
                 while let Some(stmt) = self.parse_stmt() {
@@ -298,28 +332,131 @@ impl Parser {
     }
 
     fn parse_while_stmt(&mut self) -> Option<Stmt> {
-        let while_stmt = WhileStmt::new();
+        use lexer::Token;
+        let mut while_stmt = WhileStmt::new();
+
+        self.match_token(Token::WHILE);
+        while_stmt.cond = self.parse_logic_expr();
+        self.match_token(Token::DO);
+        while let Some(stmt) = self.parse_stmt() {
+            while_stmt.stmts.push(stmt);
+        }
+        self.match_token(Token::DONE);
+        match self.next_token() {
+            Token::FINISH => {
+                while let Some(stmt) = self.parse_stmt() {
+                    while_stmt.finish.push(stmt);
+                }
+            }
+            _ => {}
+        }
         return Some(Stmt::WHILE(while_stmt))
     }
 
     fn parse_arith_expr(&mut self) -> ArithExpr {
-        return ArithExpr::new()
+        use lexer::Token;
+        let arex;
+
+        match self.next_token().clone() {
+            Token::ID(string) => {
+                self.index += 1;
+                arex = ArithExpr::ID(Var::from(string.clone(), Val::UNDEF));
+            }
+            Token::NUM(num) => {
+                self.index += 1;
+                arex = ArithExpr::NUM(num);
+            }
+            Token::FALSE => {
+                self.index += 1;
+                arex = ArithExpr::FALSE;
+            }
+            Token::TRUE => {
+                self.index += 1;
+                arex = ArithExpr::TRUE;
+            }
+            Token::EMPTY => {
+                self.index += 1;
+                arex = ArithExpr::EMPTY;
+            }
+            Token::EXIT => {
+                self.index += 1;
+                arex = ArithExpr::EXIT;
+            }
+            Token::LP => {
+                self.index += 1;
+                arex = self.parse_arith_expr();
+                self.match_token(Token::RP);
+                return arex;
+            }
+            Token::MINUS => {
+                self.index += 1;
+                arex = self.parse_arith_expr();
+                return ArithExpr::EXPR((Box::new(arex), Box::new(ArithExpr::new()), OP::MINUS))
+            }
+            _ => {
+                panic!("token {:?} unexpectedly happened", self.next_token());
+            }
+        }
+        match self.next_token() {
+            Token::PLUS => {
+                self.index += 1;
+                return ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()), OP::PLUS));
+            }
+            Token::MINUS => {
+                self.index += 1;
+                return ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()), OP::MINUS));
+            }
+            Token::XOR => {
+                self.index += 1;
+                return ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()), OP::XOR));
+            }
+            _ => {
+                panic!("d;lasfjo;ldj");
+            }
+        }
     }
 
     fn parse_stmt(&mut self) -> Option<Stmt> {
         use lexer::Token;
-        let mut stmt = Stmt::new();
-
+        let stmt;
+        let arex;
         /* if stmt is empty */
-        match &self.tokens[self.index] {
+        match self.next_token() {
             Token::DONE => {
                 return None
             }
             _ => {}
         }
-        match &self.tokens[self.index] {
-            Token::ID(_) => {
-
+        match self.next_token().clone() {
+            Token::ID(string) => {
+                self.index += 1;
+                match self.next_token() {
+                    Token::ASSIGN => {
+                        self.index += 1;
+                        arex = self.parse_arith_expr();
+                        self.match_token(Token::SEMICOLON);
+                        stmt = Stmt::ASSGN(Var::from(string.clone(), Val::new()), arex);
+                        return Some(stmt);
+                    }
+                    /* function call */
+                    Token::LP => {
+                        self.index += 1;
+                        match self.next_token() {
+                            Token::ID(string2) => {
+                                stmt = Stmt::CALL(string, Var::from(string2.clone(), Val::new()));
+                                self.match_token(Token::RP);
+                                self.match_token(Token::SEMICOLON);
+                                return Some(stmt);
+                            }
+                            _ => {
+                                panic!("expected token ID, {:?} found", self.next_token());
+                            }
+                        }
+                    }
+                    _ => {
+                        panic!("unexpected token {:?}", self.next_token());
+                    }
+                }
             }
             Token::LOOK => {
                 stmt = Stmt::LOOK;
@@ -351,7 +488,7 @@ impl Parser {
             }
 
             Token::IF => {
-                /* so we do need check this token twice */
+                /* so we dont need check this token twice */
                 self.index += 1;
                 return self.parse_if_stmt()
             }
@@ -364,7 +501,7 @@ impl Parser {
                 stmt = Stmt::RETURN;
             }
             _ => {
-                panic!("unexpected token {:?}", self.tokens[self.index]);
+                panic!("unexpected token {:?}", self.next_token());
             }
         }
         self.match_token(Token::SEMICOLON);
@@ -376,16 +513,25 @@ impl Parser {
         let mut func : Func = Func::new();
 
         /* FUNCTION */
-        self.match_token(Token::FUNCTION);
-
+        match self.tokens[self.index] {
+            Token::FUNCTION => {
+                self.index += 1;
+            }
+            Token::EOF => {
+                return None;
+            }
+            _ => {
+                panic!("token EOF or FUNCTION expected, {:?} found!", self.next_token());
+            }
+        }
         /* ID */
-        match &self.tokens[self.index] {
+        match self.next_token() {
             Token::ID(string) => {
                 func.name = string.clone();
                 self.index += 1;
             }
             _ => {
-                panic!("token ID expected, {:?} found", self.tokens[self.index]);
+                panic!("token ID expected, {:?} found", self.next_token());
             }
         }
 
@@ -393,13 +539,13 @@ impl Parser {
         self.match_token(Token::LP);
 
         /* ID */
-        match &self.tokens[self.index] {
+        match self.next_token() {
             Token::ID(string) => {
                 func.param = Var::from(string.clone(), Val::new());
                 self.index += 1;
             }
             _ => {
-                panic!("token ID expected, {:?} found", self.tokens[self.index]);
+                panic!("token ID expected, {:?} found", self.next_token());
             }
         }
 
@@ -407,7 +553,7 @@ impl Parser {
         self.match_token(Token::RP);
 
         /* var_decls */
-        match &self.tokens[self.index] {
+        match self.next_token() {
             Token::VAR | Token::BOOL | Token::INT | Token::CELL => {
                 while let Some(mut vec) = self.parse_var_decl() {
                     func.vars.append(&mut vec);
@@ -459,7 +605,7 @@ impl Parser {
             n = n + 1;
         }
         if n == 0 {
-            println!("There is no global variables");
+            println!("There is no global variables, fyi");
             self.index = i;
         }
         self.ast.funcs = self.parse_func_list();
@@ -469,11 +615,20 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::File;
+    use std::io::Read;
+
     #[test]
     fn test_var_decl() {
-        let string = String::from("var misha, masha, jopa; bool muha;
-                                   cell MIHA, appLe, tink;");
-        let mut parser = Parser::new(string);
+        let string = Vec::from("var first;");
+        let mut file = File::open("test_program1.imbaa").unwrap();
+        let mut file_prog = String::new();
+        for byte in string {
+
+        }
+        file.read_to_string(&mut file_prog).unwrap();
+        println!("{}|length {}", file_prog.trim(), file_prog.trim().len());
+        let mut parser = Parser::new(file_prog);
         parser.build_ast();
         println!("{:?}", parser.ast.vars);
     }

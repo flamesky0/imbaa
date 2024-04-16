@@ -1,9 +1,9 @@
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,PartialEq)]
 pub enum Token {
     ID(String),
     // -- integer numbers
-    NUMBER(i64), // only decimal numbers :))
+    NUM(i64), // only decimal numbers :))
     INF, // inf
     NINF, // -inf
     NAN, // nan
@@ -122,11 +122,10 @@ impl Lexer {
 
     pub fn get_token(&mut self) -> Option<Token> {
         let ptr = self.source.as_ptr();
-        while self.index < self.source.len() {
+        while self.index < self.source.len() - 1 {
             unsafe {
                 while (*ptr.add(self.index)).is_ascii_whitespace() {
                     self.index += 1;
-                    // continue
                 }
                 /* match static tokens */
                 for (token, string) in TABLE_OF_TOKENS.iter() {
@@ -141,9 +140,10 @@ impl Lexer {
                     None => ()
                 }
                 match self.match_num(ptr.add(self.index)) {
-                    Some(num) => return Some(Token::NUMBER(num)),
+                    Some(num) => return Some(Token::NUM(num)),
                     None => ()
                 }
+                println!("lexer: unknown symbol {:x} at {}", ptr.add(self.index) as u8, self.index);
                 /* nothing mathed, lexic error */
                 return Some(Token::UNKNOWN);
             }
@@ -181,7 +181,7 @@ impl Lexer {
         return None;
     }
 
-    unsafe fn cmp(&self ,ptr : *const u8, substr : &str) -> bool {
+    unsafe fn cmp(&self, ptr : *const u8, substr : &str) -> bool {
         let mut i = 0;
         while i < substr.len() {
                 if ptr.add(i) >= self.source.as_ptr().add(self.source.len()) ||
