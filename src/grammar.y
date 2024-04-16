@@ -45,7 +45,7 @@ func_list:
 	;
 
 func:
-    		FUNCTION ID '(' ID ')' DO stmts DONE
+    		FUNCTION ID '(' ID ')' var_decls DO stmts DONE
 	;
 
 stmts:
@@ -54,8 +54,7 @@ stmts:
 	;
 
 stmt:
-		var_decl ';'
-    	|	IF lgex DO stmts DONE
+    		IF lgex DO stmts DONE
     	|	IF lgex DO stmts DONE ELDEF DO stmts DONE
     	|	IF lgex DO stmts DONE ELUND DO stmts DONE
     	|	IF lgex DO stmts DONE ELDEF DO stmts DONE ELUND DO stmts DONE

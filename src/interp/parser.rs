@@ -46,17 +46,30 @@ impl Var {
 }
 #[derive(Debug)]
 struct IfStmt {
-    cond : Box<Stmt>,
+    cond : LogicExpr,
     stmts : Vec<Stmt>,
-    eldef : Option<Vec<Stmt>>,
-    elund : Option<Vec<Stmt>>
+    eldef : Vec<Stmt>,
+    elund : Vec<Stmt>
+}
+
+impl IfStmt {
+    pub fn new() -> IfStmt {
+        IfStmt {cond: LogicExpr::new(), stmts: Vec::new(),
+                eldef : Vec::new(), elund : Vec::new()}
+    }
 }
 
 #[derive(Debug)]
 struct WhileStmt {
     cond : Box<Stmt>,
     stmts : Vec<Stmt>,
-    finish : Option<Vec<Stmt>>
+    finish : Vec<Stmt>
+}
+
+impl WhileStmt {
+    pub fn new() -> WhileStmt {
+        WhileStmt { cond : Box::new(Stmt::new()), stmts : Vec::new(), finish : Vec::new() }
+    }
 }
 
 #[derive(Debug)]
@@ -70,35 +83,53 @@ enum OP {
 }
 
 #[derive(Debug)]
-enum Term {
-    EXPR(Box<LogicExpr>),
+enum ArithExpr {
+    EXPR((Box<ArithExpr>, OP)),
     ID(Var),
-    NUM(i64)
+    NUM(i64),
+    UNDEF
+}
+
+impl ArithExpr {
+    pub fn new() -> ArithExpr {
+        ArithExpr::UNDEF
+    }
 }
 
 #[derive(Debug)]
 struct LogicExpr {
     operation : Option<OP>,
-    lterm : Term,
-    rterm : Term
+    lterm : ArithExpr,
+    rterm : ArithExpr
 }
 
+impl LogicExpr {
+    pub fn new() -> LogicExpr {
+        LogicExpr {operation : None, lterm : ArithExpr::new(), rterm : ArithExpr::new()}
+    }
+}
 #[derive(Debug)]
 enum Stmt {
     IF(IfStmt),
     WHILE(WhileStmt),
     ASSGN(Var, Box<Stmt>),
     CALL(String, Var),
-    LOAD(Val),
-    DROP(Val),
-    FORWARD(Val),
-    BACKWARD(Val),
-    LEXPR(LogicExpr),
+    LOAD(ArithExpr),
+    DROP(ArithExpr),
+    FORWARD(ArithExpr),
+    BACKWARD(ArithExpr),
     RETURN,
     LOOK,
     TEST,
     LEFT,
-    RIGHT
+    RIGHT,
+    UNDEF
+}
+
+impl Stmt {
+    pub fn new() -> Stmt {
+        Stmt::UNDEF
+    }
 }
 
 #[derive(Debug)]
@@ -133,13 +164,23 @@ pub struct Parser {
 use lexer::Lexer;
 
 impl Parser {
-
     pub fn new(string : String) -> Parser {
         Parser {
                 lexer : Lexer::new(string),
                 ast : Ast {vars: Vec::new(), funcs : Vec::new()},
                 tokens : Vec::with_capacity(1024),
                 index : 0
+        }
+    }
+
+    fn match_token(&mut self, token : lexer::Token) {
+        match self.tokens[self.index] {
+            token => {
+                self.index += 1;
+            }
+            _ => {
+                panic!("{:?} expected, {:?} found", token, self.tokens[self.index])
+            }
         }
     }
 
@@ -160,9 +201,6 @@ impl Parser {
             }
             Token::CELL => {
                 val = Val::CELL(CellVal::UNDEF);
-            }
-            Token::EOF => {
-                panic!("Unexpected EOF");
             }
             _ => {
                 return None;
@@ -210,68 +248,135 @@ impl Parser {
         }
 
         if prev != Prev::SEMICOLON {
-            println!("Var declaration error, semicolon is expected!");
-            panic!();
+            panic!("Var declaration error, semicolon is expected!");
         }
 
         return Some(vars);
     }
 
+    fn parse_logic_expr(&mut self) -> LogicExpr {
+        LogicExpr::new()
+    }
+
+    fn parse_if_stmt(&mut self) -> Option<Stmt> {
+        use lexer::Token;
+        let mut if_stmt = IfStmt::new();
+
+        if_stmt.cond = self.parse_logic_expr();
+
+        self.match_token(Token::DO);
+
+        while let Some(stmt) = self.parse_stmt() {
+            if_stmt.stmts.push(stmt);
+        }
+
+        self.match_token(Token::DONE);
+
+        match self.tokens[self.index] {
+            Token::ELDEF => {
+                self.index += 1;
+                while let Some(stmt) = self.parse_stmt() {
+                    if_stmt.eldef.push(stmt);
+                }
+                self.match_token(Token::DONE);
+            }
+            _ => {}
+        }
+
+        match self.tokens[self.index] {
+            Token::ELUND => {
+                self.index += 1;
+                while let Some(stmt) = self.parse_stmt() {
+                    if_stmt.elund.push(stmt);
+                }
+                self.match_token(Token::DONE);
+            }
+            _ => {}
+        }
+
+        return Some(Stmt::IF(if_stmt))
+    }
+
+    fn parse_while_stmt(&mut self) -> Option<Stmt> {
+        let while_stmt = WhileStmt::new();
+        return Some(Stmt::WHILE(while_stmt))
+    }
+
+    fn parse_arith_expr(&mut self) -> ArithExpr {
+        return ArithExpr::new()
+    }
+
     fn parse_stmt(&mut self) -> Option<Stmt> {
         use lexer::Token;
-        let mut stmts = Vec::new();
+        let mut stmt = Stmt::new();
 
+        /* if stmt is empty */
         match &self.tokens[self.index] {
-            Token::VAR | Token::BOOL | Token::INT | Token::CELL => {
-                if let Some(mut vec) = self.parse_var_decl() {
-                    stmts.append(&mut vec);
-                }
+            Token::DONE => {
+                return None
             }
-            Token::IF => {
-                self.parse_if()
-            }
-            Token::WHILE => {
-
-            }
+            _ => {}
+        }
+        match &self.tokens[self.index] {
             Token::ID(_) => {
 
             }
-            Token::LOOK | Token::TEST | Token::LEFT | Token::RIGHT |
-            Token::LOAD | Token::DROP | Token::FORWARD | Token::BACKWARD => {
+            Token::LOOK => {
+                stmt = Stmt::LOOK;
+            }
+            Token::TEST => {
+                stmt = Stmt::TEST;
+            }
+            Token::LEFT => {
+                stmt = Stmt::LEFT;
+            }
+            Token::RIGHT => {
+                stmt = Stmt::RIGHT;
+            }
+            Token::LOAD => {
+                stmt = Stmt::LOAD(self.parse_arith_expr());
+                self.index += 1;
+            }
+            Token::DROP => {
+                stmt = Stmt::DROP(self.parse_arith_expr());
+                self.index += 1;
+            }
+            Token::FORWARD => {
+                stmt = Stmt::FORWARD(self.parse_arith_expr());
+                self.index += 1;
+            }
+            Token::BACKWARD => {
+                stmt = Stmt::BACKWARD(self.parse_arith_expr());
+                self.index += 1;
+            }
 
+            Token::IF => {
+                /* so we do need check this token twice */
+                self.index += 1;
+                return self.parse_if_stmt()
+            }
+            Token::WHILE => {
+                self.index += 1;
+                return self.parse_while_stmt()
             }
             Token::RETURN => {
-
+                self.index += 1;
+                stmt = Stmt::RETURN;
             }
             _ => {
                 panic!("unexpected token {:?}", self.tokens[self.index]);
             }
         }
-
-        match &self.tokens[self.index] {
-            Token::SEMICOLON => {
-                self.index += 1;
-            }
-            _ => {
-                panic!("token ; expected, {:?} found", self.tokens[self.index]);
-            }
-        }
-        return Some(stmts);
+        self.match_token(Token::SEMICOLON);
+        return Some(stmt);
     }
 
-    fn parse_func(&mut self) -> bool {
+    fn parse_func(&mut self) -> Option<Func> {
         use lexer::Token;
         let mut func : Func = Func::new();
 
         /* FUNCTION */
-        match &self.tokens[self.index] {
-            Token::FUNCTION => {
-                self.index += 1;
-            }
-            _ => {
-                panic!("expected token FUNCTION, {:?} found", self.tokens[self.index]);
-            }
-        }
+        self.match_token(Token::FUNCTION);
 
         /* ID */
         match &self.tokens[self.index] {
@@ -285,14 +390,7 @@ impl Parser {
         }
 
         /* ( */
-        match &self.tokens[self.index] {
-            Token::LP => {
-                self.index += 1;
-            }
-            _ => {
-                panic!("token ( expected, {:?} found", self.tokens[self.index]);
-            }
-        }
+        self.match_token(Token::LP);
 
         /* ID */
         match &self.tokens[self.index] {
@@ -306,24 +404,20 @@ impl Parser {
         }
 
         /* ) */
+        self.match_token(Token::RP);
+
+        /* var_decls */
         match &self.tokens[self.index] {
-            Token::RP => {
-                self.index += 1;
+            Token::VAR | Token::BOOL | Token::INT | Token::CELL => {
+                while let Some(mut vec) = self.parse_var_decl() {
+                    func.vars.append(&mut vec);
+                }
             }
-            _ => {
-                panic!("token ) expected, {:?} found", self.tokens[self.index]);
-            }
+            _ => {}
         }
 
         /* DO */
-        match &self.tokens[self.index] {
-            Token::DO => {
-                self.index += 1;
-            }
-            _ => {
-                panic!("token ) expected, {:?} found", self.tokens[self.index]);
-            }
-        }
+        self.match_token(Token::DO);
 
         /* stmt */
         while let Some(stmt) = self.parse_stmt() {
@@ -331,36 +425,25 @@ impl Parser {
         }
 
         /* DONE */
-        match &self.tokens[self.index] {
-            Token::DONE => {
-                self.index += 1;
-            }
-            _ => {
-                panic!("token ) expected, {:?} found", self.tokens[self.index]);
-            }
-        }
+        self.match_token(Token::DONE);
 
-        true
+        Some(func)
     }
 
-    fn parse_func_list(&mut self) -> bool {
-        let mut n = 0;
-        while self.parse_func() {
-            n = n + 1;
+    fn parse_func_list(&mut self) -> Vec<Func> {
+        let mut funcs = Vec::new();
+        while let Some(func) = self.parse_func() {
+            funcs.push(func);
         }
-        if n > 0 {
-            return true;
-        }
-        return false;
+        return funcs;
     }
 
-    pub fn build_ast(&mut self) -> bool {
+    pub fn build_ast(&mut self) {
         use lexer::Token;
         while let Some(token) = self.lexer.get_token() {
             match token {
                 Token::UNKNOWN => {
-                    println!("Lexer error, unknown symbol!");
-                    return false;
+                    panic!("Lexer error, unknown symbol!");
                 }
                 _ => {
                     self.tokens.push(token);
@@ -379,11 +462,7 @@ impl Parser {
             println!("There is no global variables");
             self.index = i;
         }
-        if self.parse_func_list() {
-            println!("There is no funtions! Write a one!");
-            return false;
-        }
-        true
+        self.ast.funcs = self.parse_func_list();
     }
 }
 
