@@ -29,7 +29,7 @@ fn main() -> Result<(), std::io::Error> {
         return Ok(());
     }
 
-    let mut parser = parser::Parser::new(program);
+    let mut parser = parser::Parser::new(&program);
     /* build AST here */
     parser.build_ast();
     file_with_map = File::open(args.nth(2).unwrap())?;

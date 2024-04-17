@@ -5,7 +5,6 @@ pub enum Token {
     // -- integer numbers
     NUM(i64), // only decimal numbers :))
     INF, // inf
-    NINF, // -inf
     NAN, // nan
     // -- logic
     TRUE, //  true
@@ -61,7 +60,7 @@ pub enum Token {
 }
 
 /* table of static tokens */
-static TABLE_OF_TOKENS : [(Token, &'static str); 45] =
+static TABLE_OF_KEYWORDS : [(Token, &'static str); 44] =
                             [
                                 (Token::BACKWARD, "BACKWARD"),
                                 (Token::BOOL, "BOOL"),
@@ -81,7 +80,6 @@ static TABLE_OF_TOKENS : [(Token, &'static str); 45] =
                                 (Token::IF, "IF"),
                                 (Token::INF, "INF"),
                                 (Token::INT, "INT"),
-                                (Token::NINF, "-INF"),
                                 (Token::LEFT, "LEFT"),
                                 (Token::LOAD, "LOAD"),
                                 (Token::LOOK, "LOOK"),
@@ -109,88 +107,137 @@ static TABLE_OF_TOKENS : [(Token, &'static str); 45] =
                                 (Token::SEMICOLON, ";"),
                                 (Token::COMMA, ",")
                             ];
-pub struct Lexer {
-    source : String,
-    index : usize,
+pub struct Lexer <'a> {
+    index : std::iter::Peekable<std::str::Chars<'a>>
 }
 
-impl Lexer {
+impl <'a> Lexer<'a> {
     /* interpreter is case insensitive, so we do make uppercase */
-    pub fn new(source : String) -> Lexer {
-        Lexer {source : source.to_uppercase(), index : 0}
+    pub fn new(source : &'a String) -> Lexer<'a> {
+        Lexer {index : source.chars().peekable()}
     }
 
     pub fn get_token(&mut self) -> Option<Token> {
-        let ptr = self.source.as_ptr();
-        while self.index < self.source.len() - 1 {
-            unsafe {
-                while (*ptr.add(self.index)).is_ascii_whitespace() {
-                    self.index += 1;
-                }
-                /* match static tokens */
-                for (token, string) in TABLE_OF_TOKENS.iter() {
-                    //println!("{:?} {}", token, string);
-                    if self.cmp(ptr.add(self.index), string) {
-                        self.index += string.len();
-                        return Some((*token).clone())
+        //println!("get token called");
+        self.skip_whitespaces();
+        //println!("Whitespaces gone");
+        if let Some(keyword) = self.match_keyword() {
+            return Some(keyword);
+        }
+        if let Some(id) = self.match_id() {
+            return Some(Token::ID(id));
+        }
+        if let Some(num) = self.match_num() {
+            return Some(Token::NUM(num));
+        }
+        if let Some(_) = self.index.next() {
+            /* Nothing matched, but input stream is not empty*/
+            return Some(Token::UNKNOWN);
+        }
+        None
+    }
+
+    fn skip_whitespaces(&mut self) {
+        while let Some(letter) = self.index.peek() {
+            if letter.is_ascii_whitespace() {
+                self.index.next();
+            } else {
+                break
+            }
+        }
+    }
+
+    fn token_is_punctuation(token : &Token) -> bool {
+        use Token::*;
+        match token {
+            PLUS | MINUS | XOR | HASH | EQUALS |
+                LESS | MORE | ASSIGN | LP | LB |
+                RP | RB | SEMICOLON | COMMA => {
+                true
+            }
+            _ => {
+                false
+            }
+        }
+    }
+
+    fn match_keyword(&mut self) -> Option<Token> {
+        let save = self.index.clone();
+        'outer: for (token, string) in &TABLE_OF_KEYWORDS {
+            self.index = save.clone();
+            for letter in string.chars() {
+                if let Some(lett) = self.index.peek() {
+                    if lett.to_ascii_uppercase() != letter {
+                        continue 'outer;
                     }
+                    //println!("letter: {}", lett);
+                } else {
+                    continue 'outer;
                 }
-                match self.match_id(ptr.add(self.index)) {
-                    Some(string) => return Some(Token::ID(string)),
-                    None => ()
+                self.index.next();
+            }
+            if Lexer::token_is_punctuation(token) {
+                return Some(token.clone());
+            } else {
+                /* dont watch here */
+                if let Some(l) = self.index.peek() {
+                    if l.is_ascii_whitespace() ||
+                        l.is_ascii_punctuation() {
+                            return Some(token.clone());
+                    }
+                    self.index = save;
+                    return None;
+                } else {
+                    return Some(token.clone());
                 }
-                match self.match_num(ptr.add(self.index)) {
-                    Some(num) => return Some(Token::NUM(num)),
-                    None => ()
-                }
-                println!("lexer: unknown symbol {:x} at {}", ptr.add(self.index) as u8, self.index);
-                /* nothing mathed, lexic error */
-                return Some(Token::UNKNOWN);
             }
         }
         None
     }
 
-    unsafe fn match_id(&mut self, ptr : *const u8) -> Option<String> {
-        let mut string = String::with_capacity(64);
-        let mut i = 0;
-        while ptr.add(i) < self.source.as_ptr().add(self.source.len()) &&
-                (*ptr.add(i)).is_ascii_alphabetic() {
-                string.push(*ptr.add(i) as char);
-                i = i + 1;
+    fn match_id(&mut self) -> Option<String> {
+        let mut string = String::new();
+        let save = self.index.clone();
+        let mut prev = self.index.clone();
+        if let Some(letter) = self.index.peek() {
+            if letter.is_ascii_alphabetic() {
+                string.push(*letter);
+                self.index.next();
+                while let Some(letter) = self.index.next() {
+                    if letter.is_ascii_alphanumeric() {
+                        prev = self.index.clone();
+                        string.push(letter);
+                    } else {
+                        self.index = prev;
+                        return Some(string);
+                    }
+                }
+            } else {
+                self.index = save;
+                return None;
+            }
         }
-        if !string.is_empty() {
-            self.index += i;
-            return Some(string);
-        }
-        return None;
+        None
     }
 
-    unsafe fn match_num(&mut self, ptr : *const u8) -> Option<i64> {
-        let mut string = String::with_capacity(64);
-        let mut i = 0;
-        while ptr.add(i) < self.source.as_ptr().add(self.source.len()) &&
-                (*ptr.add(i)).is_ascii_digit() {
-                string.push(*ptr.add(i) as char);
-                i = i + 1;
+    fn match_num(&mut self) -> Option<i64> {
+        let mut string = String::new();
+        let mut matched : bool = false;
+
+        while let Some(letter) = self.index.peek() {
+            if letter.is_ascii_digit() {
+                string.push(*letter);
+                self.index.next();
+                matched = true;
+            } else {
+                break;
+            }
         }
-        if !string.is_empty() {
-            self.index += i;
+
+        if matched {
             return Some(string.parse::<i64>().unwrap());
         }
-        return None;
-    }
-
-    unsafe fn cmp(&self, ptr : *const u8, substr : &str) -> bool {
-        let mut i = 0;
-        while i < substr.len() {
-                if ptr.add(i) >= self.source.as_ptr().add(self.source.len()) ||
-                    *ptr.add(i) != substr.as_bytes()[i] {
-                    return false;
-                }
-            i = i + 1;
-        }
-        return true;
+        None
     }
 }
 
@@ -198,18 +245,22 @@ impl Lexer {
 mod tests {
     use super::*;
     #[test]
-    fn test1() {
-        let _string1 = String::from("   VAR INT BOOL CELL ; + - < > = while do finIsh donw forward ; look ) (  ) () 381
-                                    8 + 34 := 3 ^ drop reTURn elund eldef = < ; :=  xor bool nan inf -INF --InF");
+    fn test_lexer() {
+        let _string1 = String::from("   VAR 9,  883;INT BOOL CELL ; + - < > = while don, +don0; don1 don2 don10 misha do finIsh done forward ; look ) (  ) () 381
+                                    8 + 34 := 3; ^ drop reTURn elund 8  ;:=,   ieldef = < ; :=  xor bool nan inf -INF --InF");
 
-        let _string2 = String::from("var misha, masha, jopa; bool mesha;");
-        let mut lexer = Lexer::new(_string2);
+        let _string2 = String::from("var , ; bool  ;;,:=;var;bool;do([ empty  ] drop[  ])");
+        /* let mut buffer = String::new();
+        let stdin = std::io::stdin(); // We get `Stdin` here. */
+        let mut lexer = Lexer::new(&_string1);
+
         while let Some(token) = lexer.get_token() {
             println!("{:?}", token);
             match token {
                 Token::UNKNOWN => return,
                 _ => ()
             }
+        //stdin.read_line(&mut buffer).unwrap();
         }
     }
 }

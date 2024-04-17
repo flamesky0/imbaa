@@ -162,8 +162,8 @@ struct Ast {
     funcs : Vec<Func>
 }
 
-pub struct Parser {
-    lexer : lexer::Lexer,
+pub struct Parser <'a> {
+    lexer : lexer::Lexer<'a>,
     ast : Ast,
     tokens : Vec<lexer::Token>,
     index : usize
@@ -171,10 +171,10 @@ pub struct Parser {
 
 use lexer::Lexer;
 
-impl Parser {
-    pub fn new(string : String) -> Parser {
+impl <'a> Parser <'a>{
+    pub fn new(string : &'a String) -> Parser<'a> {
         Parser {
-                lexer : Lexer::new(string),
+                lexer : Lexer::new(&string),
                 ast : Ast {vars: Vec::new(), funcs : Vec::new()},
                 tokens : Vec::with_capacity(1024),
                 index : 0
@@ -628,7 +628,7 @@ mod tests {
         }
         file.read_to_string(&mut file_prog).unwrap();
         println!("{}|length {}", file_prog.trim(), file_prog.trim().len());
-        let mut parser = Parser::new(file_prog);
+        let mut parser = Parser::new(&file_prog);
         parser.build_ast();
         println!("{:?}", parser.ast.vars);
     }
