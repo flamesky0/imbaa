@@ -311,6 +311,7 @@ impl <'a> Parser <'a>{
         match self.next_token() {
             Token::ELDEF => {
                 self.index += 1;
+                self.match_token(Token::DO);
                 while let Some(stmt) = self.parse_stmt() {
                     if_stmt.eldef.push(stmt);
                 }
@@ -322,6 +323,7 @@ impl <'a> Parser <'a>{
         match self.next_token() {
             Token::ELUND => {
                 self.index += 1;
+                self.match_token(Token::DO);
                 while let Some(stmt) = self.parse_stmt() {
                     if_stmt.elund.push(stmt);
                 }
@@ -338,7 +340,6 @@ impl <'a> Parser <'a>{
         use lexer::Token;
         let mut while_stmt = WhileStmt::new();
 
-        self.match_token(Token::WHILE);
         while_stmt.cond = self.parse_logic_expr();
         self.match_token(Token::DO);
         while let Some(stmt) = self.parse_stmt() {
@@ -347,9 +348,11 @@ impl <'a> Parser <'a>{
         self.match_token(Token::DONE);
         match self.next_token() {
             Token::FINISH => {
+                self.match_token(Token::FINISH);
                 while let Some(stmt) = self.parse_stmt() {
                     while_stmt.finish.push(stmt);
                 }
+                self.match_token(Token::DONE);
             }
             _ => {}
         }
@@ -448,6 +451,7 @@ impl <'a> Parser <'a>{
                         match self.next_token() {
                             Token::ID(string2) => {
                                 stmt = Stmt::CALL(string, Var::from(string2.clone(), Val::new()));
+                                self.index += 1;
                                 self.match_token(Token::RP);
                                 self.match_token(Token::SEMICOLON);
                                 return Some(stmt);

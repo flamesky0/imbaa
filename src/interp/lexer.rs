@@ -206,8 +206,8 @@ impl <'a> Lexer<'a> {
         let mut prev = self.index.clone();
         if let Some(letter) = self.index.peek() {
             if letter.is_ascii_alphabetic() {
-                string.push(*letter);
-                self.index.next();
+                //string.push(*letter);
+                //self.index.next();
                 while let Some(letter) = self.index.next() {
                     if letter.is_ascii_alphanumeric() {
                         prev = self.index.clone();
@@ -255,10 +255,10 @@ mod tests {
                                     8 + 34 := 3; ^ drop reTURn elund 8  ;:=,   ieldef = < ; :=  xor bool nan inf -INF --InF");
 
         let _string2 = String::from("var , ; bool  ;;,:=;var;bool;do([ empty  ] drop[  ])");
-        let _string3 = String::from("if 5 > 1 do look; done ");
+        let _string3 = String::from("if 5 > 2; a do look; done ");
         let mut buffer = String::new();
         let stdin = std::io::stdin(); // We get `Stdin` here.
-        let mut lexer = Lexer::new(&_string3);
+        let mut lexer = Lexer::new(&_string1);
 
         while let Some(token) = lexer.get_token() {
             println!("{:?}", token);

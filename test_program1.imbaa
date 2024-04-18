@@ -8,9 +8,41 @@ cell bottle, keyboard;
 function misha() do
 	look;
 	load 5 + 3;
-	forward (5 + 3) ^ (71);
+	forward (5 + 3) ^ (7);
 	if 5 > 1 do
 		look;
 		drop 5+7;
+	done
+
+	while a > b + c do
+		drop a + c;
+		left;
+		if ls = sl do
+			a := a + b;
+		done
+		c := b + ai;
+	done
+
+	finish
+		forward ((a+b)+c)^b;
+	done
+done
+
+function main()
+var musha, mesha;
+bool pesha, hesha;
+do
+	misha(jopa);
+	a := -b;
+	if a > b do
+		while c = k do
+			misha(jopa);
+			a := jopa;
+		done
+	done eldef do
+		jopa:=jopa;
+	done elund do
+		while major + jopa < minor - jopa do
+		done
 	done
 done
