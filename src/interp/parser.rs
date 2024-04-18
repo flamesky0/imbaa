@@ -194,6 +194,7 @@ impl <'a> Parser <'a>{
     }
 
     fn parse_var_decl(&mut self) -> Option<Vec<Var>> {
+        println!("parse_val_decl");
         use lexer::Token;
         let val : Val;
         let mut vars : Vec<Var> = Vec::new();
@@ -224,7 +225,6 @@ impl <'a> Parser <'a>{
             SEMICOLON
         }
         let mut prev = Prev::DECL;
-        println!("index: {}", self.index);
         for token in self.tokens.iter().skip(self.index) {
             match token {
                 Token::ID(string) => {
@@ -264,6 +264,7 @@ impl <'a> Parser <'a>{
     }
 
     fn parse_logic_expr(&mut self) -> LogicExpr {
+        println!("parse_logic_expr");
         use lexer::Token;
         let larex;
         let rarex;
@@ -293,6 +294,7 @@ impl <'a> Parser <'a>{
     }
 
     fn parse_if_stmt(&mut self) -> Option<Stmt> {
+        println!("parse_if_stmt");
         use lexer::Token;
         let mut if_stmt = IfStmt::new();
 
@@ -332,6 +334,7 @@ impl <'a> Parser <'a>{
     }
 
     fn parse_while_stmt(&mut self) -> Option<Stmt> {
+        println!("parse_while_stmt");
         use lexer::Token;
         let mut while_stmt = WhileStmt::new();
 
@@ -354,6 +357,7 @@ impl <'a> Parser <'a>{
     }
 
     fn parse_arith_expr(&mut self) -> ArithExpr {
+        println!("parse_arith_stmt");
         use lexer::Token;
         let arex;
 
@@ -386,7 +390,6 @@ impl <'a> Parser <'a>{
                 self.index += 1;
                 arex = self.parse_arith_expr();
                 self.match_token(Token::RP);
-                return arex;
             }
             Token::MINUS => {
                 self.index += 1;
@@ -411,7 +414,7 @@ impl <'a> Parser <'a>{
                 return ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()), OP::XOR));
             }
             _ => {
-                panic!("d;lasfjo;ldj");
+                return arex;
             }
         }
     }
@@ -421,6 +424,7 @@ impl <'a> Parser <'a>{
         let stmt;
         let arex;
         /* if stmt is empty */
+        println!("parse_stmt");
         match self.next_token() {
             Token::DONE => {
                 return None
@@ -459,32 +463,36 @@ impl <'a> Parser <'a>{
                 }
             }
             Token::LOOK => {
+                self.index += 1;
                 stmt = Stmt::LOOK;
             }
             Token::TEST => {
+                self.index += 1;
                 stmt = Stmt::TEST;
             }
             Token::LEFT => {
+                self.index += 1;
                 stmt = Stmt::LEFT;
             }
             Token::RIGHT => {
+                self.index += 1;
                 stmt = Stmt::RIGHT;
             }
             Token::LOAD => {
-                stmt = Stmt::LOAD(self.parse_arith_expr());
                 self.index += 1;
+                stmt = Stmt::LOAD(self.parse_arith_expr());
             }
             Token::DROP => {
-                stmt = Stmt::DROP(self.parse_arith_expr());
                 self.index += 1;
+                stmt = Stmt::DROP(self.parse_arith_expr());
             }
             Token::FORWARD => {
-                stmt = Stmt::FORWARD(self.parse_arith_expr());
                 self.index += 1;
+                stmt = Stmt::FORWARD(self.parse_arith_expr());
             }
             Token::BACKWARD => {
-                stmt = Stmt::BACKWARD(self.parse_arith_expr());
                 self.index += 1;
+                stmt = Stmt::BACKWARD(self.parse_arith_expr());
             }
 
             Token::IF => {
@@ -513,6 +521,7 @@ impl <'a> Parser <'a>{
         let mut func : Func = Func::new();
 
         /* FUNCTION */
+        println!("parse_func");
         match self.tokens[self.index] {
             Token::FUNCTION => {
                 self.index += 1;
@@ -537,17 +546,6 @@ impl <'a> Parser <'a>{
 
         /* ( */
         self.match_token(Token::LP);
-
-        /* ID */
-        match self.next_token() {
-            Token::ID(string) => {
-                func.param = Var::from(string.clone(), Val::new());
-                self.index += 1;
-            }
-            _ => {
-                panic!("token ID expected, {:?} found", self.next_token());
-            }
-        }
 
         /* ) */
         self.match_token(Token::RP);
@@ -577,6 +575,7 @@ impl <'a> Parser <'a>{
     }
 
     fn parse_func_list(&mut self) -> Vec<Func> {
+        println!("parse_func_list");
         let mut funcs = Vec::new();
         while let Some(func) = self.parse_func() {
             funcs.push(func);
@@ -587,6 +586,7 @@ impl <'a> Parser <'a>{
     pub fn build_ast(&mut self) {
         use lexer::Token;
         while let Some(token) = self.lexer.get_token() {
+            println!("{:?}", token);
             match token {
                 Token::UNKNOWN => {
                     panic!("Lexer error, unknown symbol!");
@@ -619,15 +619,14 @@ mod tests {
     use std::io::Read;
 
     #[test]
-    fn test_var_decl() {
-        let string = Vec::from("var first;");
+    fn parser() {
+        //let string = Vec::from("var first;");
         let mut file = File::open("test_program1.imbaa").unwrap();
         let mut file_prog = String::new();
-        for byte in string {
-
-        }
         file.read_to_string(&mut file_prog).unwrap();
-        println!("{}|length {}", file_prog.trim(), file_prog.trim().len());
+        println!("-------PROGRAM---------");
+        print!("{}", file_prog);
+        println!("-------PROGRAM---------");
         let mut parser = Parser::new(&file_prog);
         parser.build_ast();
         println!("{:?}", parser.ast.vars);

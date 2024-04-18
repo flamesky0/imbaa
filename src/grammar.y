@@ -45,7 +45,7 @@ func_list:
 	;
 
 func:
-    		FUNCTION ID '(' ID ')' var_decls DO stmts DONE
+    		FUNCTION ID '(' ')' var_decls DO stmts DONE
 	;
 
 stmts:
@@ -87,8 +87,7 @@ command:
 	|	DROP arex
 	|	FORWARD arex
 	|	BACKWARD arex
-
-       ;
+       	;
 
 lgex:
 	|	agex '>' lrex

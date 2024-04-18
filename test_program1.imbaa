@@ -4,3 +4,13 @@ bool misha, masha, musha;
 int computer, cup;
 cell bottle, keyboard;
 
+
+function misha() do
+	look;
+	load 5 + 3;
+	forward (5 + 3) ^ (71);
+	if 5 > 1 do
+		look;
+		drop 5+7;
+	done
+done

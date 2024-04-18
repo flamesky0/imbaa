@@ -119,6 +119,11 @@ impl <'a> Lexer<'a> {
 
     pub fn get_token(&mut self) -> Option<Token> {
         //println!("get token called");
+        // FOR DEBUG
+        /* let mut buffer = String::new();
+        let stdin = std::io::stdin();
+        stdin.read_line(&mut buffer).unwrap(); */
+
         self.skip_whitespaces();
         //println!("Whitespaces gone");
         if let Some(keyword) = self.match_keyword() {
@@ -245,14 +250,15 @@ impl <'a> Lexer<'a> {
 mod tests {
     use super::*;
     #[test]
-    fn test_lexer() {
+    fn lexer() {
         let _string1 = String::from("   VAR 9,  883;INT BOOL CELL ; + - < > = while don, +don0; don1 don2 don10 misha do finIsh done forward ; look ) (  ) () 381
                                     8 + 34 := 3; ^ drop reTURn elund 8  ;:=,   ieldef = < ; :=  xor bool nan inf -INF --InF");
 
         let _string2 = String::from("var , ; bool  ;;,:=;var;bool;do([ empty  ] drop[  ])");
-        /* let mut buffer = String::new();
-        let stdin = std::io::stdin(); // We get `Stdin` here. */
-        let mut lexer = Lexer::new(&_string1);
+        let _string3 = String::from("if 5 > 1 do look; done ");
+        let mut buffer = String::new();
+        let stdin = std::io::stdin(); // We get `Stdin` here.
+        let mut lexer = Lexer::new(&_string3);
 
         while let Some(token) = lexer.get_token() {
             println!("{:?}", token);
@@ -260,7 +266,7 @@ mod tests {
                 Token::UNKNOWN => return,
                 _ => ()
             }
-        //stdin.read_line(&mut buffer).unwrap();
+            stdin.read_line(&mut buffer).unwrap();
         }
     }
 }
