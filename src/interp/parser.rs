@@ -156,6 +156,11 @@ pub struct Ast {
     funcs : Vec<Func>
 }
 
+impl Ast {
+    pub fn new() -> Ast {
+        Ast {vars : Vec::new(), funcs : Vec::new()}
+    }
+}
 pub struct Parser <'a> {
     lexer : std::iter::Peekable<lexer::Lexer<'a>>,
     ast : Ast,

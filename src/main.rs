@@ -3,7 +3,6 @@ mod graphics;
 
 use std::fs::File;
 use std::io::Read;
-use interp::parser;
 
 fn help() {
     println!("Usage:
@@ -28,11 +27,10 @@ fn main() -> Result<(), std::io::Error> {
         println!("Go and fix your program, I dont know UTF-8!");
         return Ok(());
     }
-
-    let mut parser = parser::Parser::new(&program);
-    /* build AST here */
+    Ok(())
+    /* let mut parser = parser::Parser::new(&program);
     parser.build_ast();
     file_with_map = File::open(args.nth(2).unwrap())?;
     file_with_map.read_to_string(&mut map)?;
-    Ok(())
+    Ok(()) */
 }
