@@ -117,31 +117,6 @@ impl <'a> Lexer<'a> {
         Lexer {index : source.chars().peekable()}
     }
 
-    pub fn get_token(&mut self) -> Option<Token> {
-        //println!("get token called");
-        // FOR DEBUG
-        /* let mut buffer = String::new();
-        let stdin = std::io::stdin();
-        stdin.read_line(&mut buffer).unwrap(); */
-
-        self.skip_whitespaces();
-        //println!("Whitespaces gone");
-        if let Some(keyword) = self.match_keyword() {
-            return Some(keyword);
-        }
-        if let Some(id) = self.match_id() {
-            return Some(Token::ID(id));
-        }
-        if let Some(num) = self.match_num() {
-            return Some(Token::NUM(num));
-        }
-        if let Some(_) = self.index.next() {
-            /* Nothing matched, but input stream is not empty*/
-            return Some(Token::UNKNOWN);
-        }
-        None
-    }
-
     fn skip_whitespaces(&mut self) {
         while let Some(letter) = self.index.peek() {
             if letter.is_ascii_whitespace() {
@@ -246,6 +221,46 @@ impl <'a> Lexer<'a> {
     }
 }
 
+impl<'a> Iterator for Lexer <'a> {
+    type Item = Token;
+    fn next(&mut self) -> Option<Token> {
+        //println!("get token called");
+        // FOR DEBUG
+        /* let mut buffer = String::new();
+        let stdin = std::io::stdin();
+        stdin.read_line(&mut buffer).unwrap(); */
+
+        self.skip_whitespaces();
+        //println!("Whitespaces gone");
+        if let Some(keyword) = self.match_keyword() {
+            return Some(keyword);
+        }
+        if let Some(id) = self.match_id() {
+            return Some(Token::ID(id));
+        }
+        if let Some(num) = self.match_num() {
+            return Some(Token::NUM(num));
+        }
+        if let Some(_) = self.index.next() {
+            /* Nothing matched, but input stream is not empty*/
+            return Some(Token::UNKNOWN);
+        }
+        None
+    }
+}
+
+impl Default for &Token {
+    fn default() -> Self {
+        return &Token::EOF;
+    }
+}
+
+impl Default for Token {
+    fn default() -> Self {
+        return Token::EOF;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -258,9 +273,9 @@ mod tests {
         let _string3 = String::from("if 5 > 2; a do look; done ");
         let mut buffer = String::new();
         let stdin = std::io::stdin(); // We get `Stdin` here.
-        let mut lexer = Lexer::new(&_string1);
+        let lexer = Lexer::new(&_string1);
 
-        while let Some(token) = lexer.get_token() {
+        for token in lexer.into_iter() {
             println!("{:?}", token);
             match token {
                 Token::UNKNOWN => return,

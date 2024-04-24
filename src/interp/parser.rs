@@ -32,16 +32,16 @@ impl Val {
 #[derive(Debug)]
 struct Var {
     name : String,
-    val : Val
+    type_ : Val
 }
 
 impl Var {
     pub fn new() -> Var {
-        Var {name : String::new(), val : Val::new()}
+        Var {name : String::new(), type_ : Val::new()}
     }
 
-    pub fn from(name : String, val : Val) -> Var {
-        Var {name, val}
+    pub fn from(name : String, type_ : Val) -> Var {
+        Var {name, type_}
     }
 }
 #[derive(Debug)]
@@ -134,12 +134,6 @@ enum Stmt {
     UNDEF
 }
 
-impl Stmt {
-    pub fn new() -> Stmt {
-        Stmt::UNDEF
-    }
-}
-
 #[derive(Debug)]
 struct Func {
     name : String,
@@ -157,16 +151,14 @@ impl Func {
 }
 
 #[derive(Debug)]
-struct Ast {
+pub struct Ast {
     vars : Vec<Var>,
     funcs : Vec<Func>
 }
 
 pub struct Parser <'a> {
-    lexer : lexer::Lexer<'a>,
+    lexer : std::iter::Peekable<lexer::Lexer<'a>>,
     ast : Ast,
-    tokens : Vec<lexer::Token>,
-    index : usize
 }
 
 use lexer::Lexer;
@@ -174,32 +166,34 @@ use lexer::Lexer;
 impl <'a> Parser <'a>{
     pub fn new(string : &'a String) -> Parser<'a> {
         Parser {
-                lexer : Lexer::new(&string),
+                lexer : Lexer::new(&string).into_iter().peekable(),
                 ast : Ast {vars: Vec::new(), funcs : Vec::new()},
-                tokens : Vec::with_capacity(1024),
-                index : 0
         }
     }
 
-    fn match_token(&mut self, token : lexer::Token) {
-        if self.tokens[self.index] == token {
-            self.index += 1;
-        } else {
-            panic!("{:?} expected, {:?} found", token, self.next_token())
+    fn match_token(&mut self, token : lexer::Token) -> Result<(), String> {
+        match self.lexer.peek() {
+            Some(next_token) => {
+                if token == *next_token {
+                    self.lexer.next();
+                    return Ok(())
+                } else {
+                    return Err(format!("expected {:?}, found {:?}", token, next_token).to_string());
+                }
+            },
+            None => {
+                return Err("unexpected EOF".to_string())
+            }
         }
     }
 
-    fn next_token(&self) -> &lexer::Token {
-        return &self.tokens[self.index];
-    }
-
-    fn parse_var_decl(&mut self) -> Option<Vec<Var>> {
+    fn parse_var_decl(&mut self) -> Result<Option<Vec<Var>>, String> {
         println!("parse_val_decl");
         use lexer::Token;
         let val : Val;
         let mut vars : Vec<Var> = Vec::new();
 
-        match self.next_token() {
+        match self.lexer.peek().unwrap_or_default() {
             Token::VAR => {
                 val = Val::UNDEF;
             }
@@ -213,10 +207,10 @@ impl <'a> Parser <'a>{
                 val = Val::CELL(CellVal::UNDEF);
             }
             _ => {
-                return None;
+                return Ok(None);
             }
         }
-        self.index += 1;
+        self.lexer.next();
         #[derive(PartialEq)]
         enum Prev {
             DECL,
@@ -225,339 +219,360 @@ impl <'a> Parser <'a>{
             SEMICOLON
         }
         let mut prev = Prev::DECL;
-        for token in self.tokens.iter().skip(self.index) {
+        for token in &mut self.lexer {
             match token {
                 Token::ID(string) => {
                     if prev == Prev::DECL || prev == Prev::COMMA {
-                        vars.push(Var::from(string.clone(), val));
+                        vars.push(Var::from(string, val));
                     } else {
-                        panic!("Var declaration error, ID is not expected!");
+                        return Err("Var declaration error, ID is not expected!".to_string());
                     }
                     prev = Prev::ID;
                 }
                 Token::COMMA => {
                     if prev != Prev::ID {
-                        panic!("Var declaration error, comma is not expected!");
+                        return Err("Var declaration error, comma is not expected!".to_string());
                     }
                     prev = Prev::COMMA;
                 }
                 Token::SEMICOLON => {
                     if prev != Prev::ID {
-                        panic!("Var declaration error, semicolon is not expected!");
+                        return Err("Var declaration error, semicolon is not expected!".to_string());
                     }
                     prev = Prev::SEMICOLON;
-                    self.index += 1;
                     break;
                 }
                 _ => {
-                        panic!("Var declaration error, unexpected token {:?}!", token);
+                        return Err(format!("Var declaration error, unexpected token {:?}!", token).to_string());
                 }
             }
-            self.index += 1;
         }
 
         if prev != Prev::SEMICOLON {
-            panic!("Var declaration error, semicolon is expected!");
+            return Err("Var declaration error, semicolon is expected!".to_string());
         }
 
-        return Some(vars);
+        return Ok(Some(vars));
     }
 
-    fn parse_logic_expr(&mut self) -> LogicExpr {
+    fn parse_logic_expr(&mut self) -> Result<LogicExpr, String> {
         println!("parse_logic_expr");
         use lexer::Token;
         let larex;
         let rarex;
-        larex = self.parse_arith_expr();
-        match self.next_token() {
+        larex = self.parse_arith_expr()?;
+        match self.lexer.peek().unwrap_or_default() {
             Token::LESS => {
-                self.index += 1;
-                rarex = self.parse_arith_expr();
-                return LogicExpr::from(Some(OP::LESS), larex, rarex);
+                self.lexer.next();
+                rarex = self.parse_arith_expr()?;
+                return Ok(LogicExpr::from(Some(OP::LESS), larex, rarex));
             }
             Token::MORE => {
-                self.index += 1;
-                rarex = self.parse_arith_expr();
-                return LogicExpr::from(Some(OP::MORE), larex, rarex);
+                self.lexer.next();
+                rarex = self.parse_arith_expr()?;
+                return Ok(LogicExpr::from(Some(OP::MORE), larex, rarex));
             }
             Token::EQUALS => {
-                self.index += 1;
-                rarex = self.parse_arith_expr();
-                return LogicExpr::from(Some(OP::EQUALS), larex, rarex);
+                self.lexer.next();
+                rarex = self.parse_arith_expr()?;
+                return Ok(LogicExpr::from(Some(OP::EQUALS), larex, rarex));
 
             }
             _ => {
-                return LogicExpr::from(None, larex, ArithExpr::new());
+                return Ok(LogicExpr::from(None, larex, ArithExpr::new()));
             }
         }
 
     }
 
-    fn parse_if_stmt(&mut self) -> Option<Stmt> {
+    fn parse_if_stmt(&mut self) -> Result<Option<Stmt>, String> {
         println!("parse_if_stmt");
         use lexer::Token;
         let mut if_stmt = IfStmt::new();
 
-        if_stmt.cond = self.parse_logic_expr();
+        if_stmt.cond = self.parse_logic_expr()?;
 
-        self.match_token(Token::DO);
+        self.match_token(Token::DO)?;
 
-        while let Some(stmt) = self.parse_stmt() {
+        while let Ok(Some(stmt)) = self.parse_stmt() {
             if_stmt.stmts.push(stmt);
         }
 
-        self.match_token(Token::DONE);
+        self.match_token(Token::DONE)?;
 
-        match self.next_token() {
+        match self.lexer.peek().unwrap_or_default() {
             Token::ELDEF => {
-                self.index += 1;
-                self.match_token(Token::DO);
-                while let Some(stmt) = self.parse_stmt() {
+                self.lexer.next();
+                self.match_token(Token::DO)?;
+                while let Ok(Some(stmt)) = self.parse_stmt() {
                     if_stmt.eldef.push(stmt);
                 }
-                self.match_token(Token::DONE);
+                self.match_token(Token::DONE)?;
             }
             _ => {}
         }
 
-        match self.next_token() {
+        match self.lexer.peek().unwrap_or(&Token::EOF) {
             Token::ELUND => {
-                self.index += 1;
-                self.match_token(Token::DO);
-                while let Some(stmt) = self.parse_stmt() {
+                self.lexer.next();
+                self.match_token(Token::DO)?;
+                while let Ok(Some(stmt)) = self.parse_stmt() {
                     if_stmt.elund.push(stmt);
                 }
-                self.match_token(Token::DONE);
+                self.match_token(Token::DONE)?;
             }
             _ => {}
         }
 
-        return Some(Stmt::IF(if_stmt))
+        return Ok(Some(Stmt::IF(if_stmt)))
     }
 
-    fn parse_while_stmt(&mut self) -> Option<Stmt> {
+    fn parse_while_stmt(&mut self) -> Result<Option<Stmt>, String> {
         println!("parse_while_stmt");
         use lexer::Token;
         let mut while_stmt = WhileStmt::new();
 
-        while_stmt.cond = self.parse_logic_expr();
-        self.match_token(Token::DO);
-        while let Some(stmt) = self.parse_stmt() {
+        while_stmt.cond = self.parse_logic_expr()?;
+        self.match_token(Token::DO)?;
+        while let Ok(Some(stmt)) = self.parse_stmt() {
             while_stmt.stmts.push(stmt);
         }
-        self.match_token(Token::DONE);
-        match self.next_token() {
+        self.match_token(Token::DONE)?;
+        match self.lexer.peek().unwrap_or(&Token::EOF) {
             Token::FINISH => {
-                self.match_token(Token::FINISH);
-                while let Some(stmt) = self.parse_stmt() {
+                self.match_token(Token::FINISH)?;
+                while let Ok(Some(stmt)) = self.parse_stmt() {
                     while_stmt.finish.push(stmt);
                 }
-                self.match_token(Token::DONE);
+                self.match_token(Token::DONE)?;
             }
             _ => {}
         }
-        return Some(Stmt::WHILE(while_stmt))
+        return Ok(Some(Stmt::WHILE(while_stmt)))
     }
 
-    fn parse_arith_expr(&mut self) -> ArithExpr {
+    fn parse_arith_expr(&mut self) -> Result<ArithExpr, String> {
         println!("parse_arith_stmt");
         use lexer::Token;
         let arex;
 
-        match self.next_token().clone() {
-            Token::ID(string) => {
-                self.index += 1;
-                arex = ArithExpr::ID(Var::from(string.clone(), Val::UNDEF));
-            }
-            Token::NUM(num) => {
-                self.index += 1;
-                arex = ArithExpr::NUM(num);
-            }
-            Token::FALSE => {
-                self.index += 1;
-                arex = ArithExpr::FALSE;
-            }
-            Token::TRUE => {
-                self.index += 1;
-                arex = ArithExpr::TRUE;
-            }
-            Token::EMPTY => {
-                self.index += 1;
-                arex = ArithExpr::EMPTY;
-            }
-            Token::EXIT => {
-                self.index += 1;
-                arex = ArithExpr::EXIT;
-            }
-            Token::LP => {
-                self.index += 1;
-                arex = self.parse_arith_expr();
-                self.match_token(Token::RP);
-            }
-            Token::MINUS => {
-                self.index += 1;
-                arex = self.parse_arith_expr();
-                return ArithExpr::EXPR((Box::new(arex), Box::new(ArithExpr::new()), OP::MINUS))
-            }
-            _ => {
-                panic!("token {:?} unexpectedly happened", self.next_token());
-            }
-        }
-        match self.next_token() {
-            Token::PLUS => {
-                self.index += 1;
-                return ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()), OP::PLUS));
-            }
-            Token::MINUS => {
-                self.index += 1;
-                return ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()), OP::MINUS));
-            }
-            Token::XOR => {
-                self.index += 1;
-                return ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()), OP::XOR));
-            }
-            _ => {
-                return arex;
-            }
-        }
-    }
-
-    fn parse_stmt(&mut self) -> Option<Stmt> {
-        use lexer::Token;
-        let stmt;
-        let arex;
-        /* if stmt is empty */
-        println!("parse_stmt");
-        match self.next_token() {
-            Token::DONE => {
-                return None
-            }
-            _ => {}
-        }
-        match self.next_token().clone() {
-            Token::ID(string) => {
-                self.index += 1;
-                match self.next_token() {
-                    Token::ASSIGN => {
-                        self.index += 1;
-                        arex = self.parse_arith_expr();
-                        self.match_token(Token::SEMICOLON);
-                        stmt = Stmt::ASSGN(Var::from(string.clone(), Val::new()), arex);
-                        return Some(stmt);
+        match self.lexer.next() {
+            Some(token) => {
+                match token {
+                    Token::ID(string) => {
+                        arex = ArithExpr::ID(Var::from(string, Val::new()));
                     }
-                    /* function call */
+                    Token::NUM(num) => {
+                        arex = ArithExpr::NUM(num);
+                    }
+                    Token::FALSE => {
+                        arex = ArithExpr::FALSE;
+                    }
+                    Token::TRUE => {
+                        arex = ArithExpr::TRUE;
+                    }
+                    Token::EMPTY => {
+                        arex = ArithExpr::EMPTY;
+                    }
+                    Token::EXIT => {
+                        arex = ArithExpr::EXIT;
+                    }
                     Token::LP => {
-                        self.index += 1;
-                        match self.next_token() {
-                            Token::ID(string2) => {
-                                stmt = Stmt::CALL(string, Var::from(string2.clone(), Val::new()));
-                                self.index += 1;
-                                self.match_token(Token::RP);
-                                self.match_token(Token::SEMICOLON);
-                                return Some(stmt);
-                            }
-                            _ => {
-                                panic!("expected token ID, {:?} found", self.next_token());
-                            }
-                        }
+                        arex = self.parse_arith_expr()?;
+                        self.match_token(Token::RP)?;
                     }
-                    _ => {
-                        panic!("unexpected token {:?}", self.next_token());
+                    Token::MINUS => {
+                        arex = self.parse_arith_expr()?;
+                        return Ok(ArithExpr::EXPR((Box::new(arex), Box::new(ArithExpr::new()), OP::MINUS)))
+                    }
+                    x => {
+                        return Err(format!("token {:?} unexpectedly happened", x).to_string());
                     }
                 }
             }
-            Token::LOOK => {
-                self.index += 1;
-                stmt = Stmt::LOOK;
-            }
-            Token::TEST => {
-                self.index += 1;
-                stmt = Stmt::TEST;
-            }
-            Token::LEFT => {
-                self.index += 1;
-                stmt = Stmt::LEFT;
-            }
-            Token::RIGHT => {
-                self.index += 1;
-                stmt = Stmt::RIGHT;
-            }
-            Token::LOAD => {
-                self.index += 1;
-                stmt = Stmt::LOAD(self.parse_arith_expr());
-            }
-            Token::DROP => {
-                self.index += 1;
-                stmt = Stmt::DROP(self.parse_arith_expr());
-            }
-            Token::FORWARD => {
-                self.index += 1;
-                stmt = Stmt::FORWARD(self.parse_arith_expr());
-            }
-            Token::BACKWARD => {
-                self.index += 1;
-                stmt = Stmt::BACKWARD(self.parse_arith_expr());
-            }
-
-            Token::IF => {
-                /* so we dont need check this token twice */
-                self.index += 1;
-                return self.parse_if_stmt()
-            }
-            Token::WHILE => {
-                self.index += 1;
-                return self.parse_while_stmt()
-            }
-            Token::RETURN => {
-                self.index += 1;
-                stmt = Stmt::RETURN;
-            }
-            _ => {
-                panic!("unexpected token {:?}", self.next_token());
+            None => {
+                return Err(format!("token {:?} unexpectedly happened", self.lexer.peek().unwrap_or_default()).to_string());
             }
         }
-        self.match_token(Token::SEMICOLON);
-        return Some(stmt);
+        match self.lexer.peek().unwrap_or_default() {
+            Token::PLUS => {
+                self.lexer.next();
+                return Ok(ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()?), OP::PLUS)));
+            }
+            Token::MINUS => {
+                self.lexer.next();
+                return Ok(ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()?), OP::MINUS)));
+            }
+            Token::XOR => {
+                self.lexer.next();
+                return Ok(ArithExpr::EXPR((Box::new(arex), Box::new(self.parse_arith_expr()?), OP::XOR)));
+            }
+            _ => {
+                return Ok(arex);
+            }
+        }
     }
 
-    fn parse_func(&mut self) -> Option<Func> {
+    fn parse_func_call(&mut self, name : String) -> Result<Option<Stmt>, String> {
+        use lexer::Token;
+        let stmt;
+        match self.lexer.next() {
+            Some(token) => {
+                match token {
+                    Token::ID(string2) => {
+                        stmt = Stmt::CALL(name, Var::from(string2, Val::new()));
+                        self.match_token(Token::RP)?;
+                        self.match_token(Token::SEMICOLON)?;
+                        return Ok(Some(stmt));
+                    }
+                    x => {
+                        return Err(format!("expected token ID, {:?} found", x).to_string());
+                    }
+
+                }
+            }
+            None => {
+                return Err("unexpected token EOF".to_string());
+            }
+        }
+    }
+
+    fn parse_assign_or_func_call(&mut self, name : String) -> Result<Option<Stmt>, String> {
+        use lexer::Token;
+        let arex;
+        let stmt;
+        match self.lexer.next() {
+            Some(token) => {
+                match token {
+                    Token::ASSIGN => {
+                        arex = self.parse_arith_expr()?;
+                        self.match_token(Token::SEMICOLON)?;
+                        stmt = Stmt::ASSGN(Var::from(name, Val::new()), arex);
+                        return Ok(Some(stmt));
+                    }
+                    /* function call */
+                    Token::LP => {
+                        return self.parse_func_call(name);
+                    }
+                    x => {
+                        return Err(format!("unexpected token {:?}", x).to_string());
+                    }
+                }
+            }
+            None => {
+                return Err("unexpected token EOF".to_string());
+            }
+        }
+    }
+
+    fn parse_stmt(&mut self) -> Result<Option<Stmt>, String> {
+        use lexer::Token;
+        let stmt;
+        /* if stmt is empty */
+        println!("parse_stmt");
+        match self.lexer.peek().unwrap_or_default() {
+            Token::DONE => {
+                return Ok(None);
+            }
+            _ => {}
+        }
+        match self.lexer.next() {
+            Some(token) => {
+                match token {
+                    Token::ID(string) => {
+                        return self.parse_assign_or_func_call(string);
+                    }
+                    Token::LOOK => {
+                        stmt = Stmt::LOOK;
+                    }
+                    Token::TEST => {
+                        stmt = Stmt::TEST;
+                    }
+                    Token::LEFT => {
+                        stmt = Stmt::LEFT;
+                    }
+                    Token::RIGHT => {
+                        stmt = Stmt::RIGHT;
+                    }
+                    Token::LOAD => {
+                        stmt = Stmt::LOAD(self.parse_arith_expr()?);
+                    }
+                    Token::DROP => {
+                        stmt = Stmt::DROP(self.parse_arith_expr()?);
+                    }
+                    Token::FORWARD => {
+                        stmt = Stmt::FORWARD(self.parse_arith_expr()?);
+                    }
+                    Token::BACKWARD => {
+                        stmt = Stmt::BACKWARD(self.parse_arith_expr()?);
+                    }
+                    Token::IF => {
+                        /* so we dont need check this token twice */
+                        return self.parse_if_stmt()
+                    }
+                    Token::WHILE => {
+                        return self.parse_while_stmt()
+                    }
+                    Token::RETURN => {
+                        stmt = Stmt::RETURN;
+                    }
+                    x => {
+                        return Err(format!("unexpected token {:?}", x).to_string());
+                    }
+                }
+            }
+            None => {
+                return Err("unexpected token EOF".to_string());
+            }
+        }
+        self.match_token(Token::SEMICOLON)?;
+        return Ok(Some(stmt));
+    }
+
+    fn parse_func(&mut self) -> Result<Option<Func>, String> {
         use lexer::Token;
         let mut func : Func = Func::new();
 
         /* FUNCTION */
         println!("parse_func");
-        match self.tokens[self.index] {
+        match self.lexer.peek().unwrap_or_default() {
             Token::FUNCTION => {
-                self.index += 1;
+                self.lexer.next();
             }
             Token::EOF => {
-                return None;
+                return Ok(None);
             }
-            _ => {
-                panic!("token EOF or FUNCTION expected, {:?} found!", self.next_token());
+            x => {
+                return Err(format!("token EOF or FUNCTION expected, {:?} found!", x).to_string());
             }
         }
         /* ID */
-        match self.next_token() {
-            Token::ID(string) => {
-                func.name = string.clone();
-                self.index += 1;
+        match self.lexer.next() {
+            Some(token) => {
+                match token {
+                    Token::ID(string) => {
+                        func.name = string;
+                    }
+                    x => {
+                        return Err(format!("token ID expected, {:?} found!", x).to_string());
+                    }
+                }
             }
-            _ => {
-                panic!("token ID expected, {:?} found", self.next_token());
+            None => {
+                return Err("token ID expected, EOF found!".to_string());
             }
         }
 
         /* ( */
-        self.match_token(Token::LP);
+        self.match_token(Token::LP)?;
 
         /* ) */
-        self.match_token(Token::RP);
+        self.match_token(Token::RP)?;
 
         /* var_decls */
-        match self.next_token() {
+        match self.lexer.peek().unwrap_or_default() {
             Token::VAR | Token::BOOL | Token::INT | Token::CELL => {
-                while let Some(mut vec) = self.parse_var_decl() {
+                while let Ok(Some(mut vec)) = self.parse_var_decl() {
                     func.vars.append(&mut vec);
                 }
             }
@@ -565,54 +580,39 @@ impl <'a> Parser <'a>{
         }
 
         /* DO */
-        self.match_token(Token::DO);
+        self.match_token(Token::DO)?;
 
         /* stmt */
-        while let Some(stmt) = self.parse_stmt() {
+        while let Ok(Some(stmt)) = self.parse_stmt() {
             func.stmts.push(stmt);
         }
 
         /* DONE */
-        self.match_token(Token::DONE);
+        self.match_token(Token::DONE)?;
 
-        Some(func)
+        Ok(Some(func))
     }
 
-    fn parse_func_list(&mut self) -> Vec<Func> {
+    fn parse_func_list(&mut self) -> Result<Vec<Func>, String> {
         println!("parse_func_list");
         let mut funcs = Vec::new();
-        while let Some(func) = self.parse_func() {
+        while let Ok(Some(func)) = self.parse_func() {
             funcs.push(func);
         }
-        return funcs;
+        return Ok(funcs);
     }
 
-    pub fn build_ast(&mut self) {
-        use lexer::Token;
-        while let Some(token) = self.lexer.get_token() {
-            println!("{:?}", token);
-            match token {
-                Token::UNKNOWN => {
-                    panic!("Lexer error, unknown symbol!");
-                }
-                _ => {
-                    self.tokens.push(token);
-                }
-            }
-        }
-        self.tokens.push(Token::EOF);
-
-        let i = self.index;
+    pub fn build_ast(mut self) -> Result<Ast, String> {
         let mut n = 0;
-        while let Some(mut vec) = self.parse_var_decl() {
+        while let Ok(Some(mut vec)) = self.parse_var_decl() {
             self.ast.vars.append(&mut vec);
             n = n + 1;
         }
         if n == 0 {
             println!("There is no global variables, fyi");
-            self.index = i;
         }
-        self.ast.funcs = self.parse_func_list();
+        self.ast.funcs = self.parse_func_list()?;
+        return Ok(self.ast);
     }
 }
 
@@ -631,8 +631,15 @@ mod tests {
         println!("-------PROGRAM---------");
         print!("{}", file_prog);
         println!("-------PROGRAM---------");
-        let mut parser = Parser::new(&file_prog);
-        parser.build_ast();
-        println!("{:?}", parser.ast.vars);
+        let parser = Parser::new(&file_prog);
+        match parser.build_ast() {
+            Ok(ast) => {
+                println!("Ok");
+            }
+            Err(string) => {
+                println!("{}", string);
+            }
+        }
+        //println!("{:?}", parser.ast.vars);
     }
 }
